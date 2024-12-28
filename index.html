@@ -41,7 +41,7 @@
       cursor: pointer;
       transition: all 0.3s ease;
       box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-      margin: 5px 0;
+      margin: 5px;
     }
 
     button:hover {
@@ -126,6 +126,7 @@
   <h1>プロキシby zhjpwlj</h1>
   <textarea id="manualInput" placeholder="ここにURLを入力してください。各URLは改行で区切る。"></textarea>
   <button onclick="checkTypedProxies()">入力されたURLを確認</button>
+  <button onclick="fetchAndCheckProxies()">ウェブサイトからプロキシを検索</button>
   <div class="filter">
     <input type="checkbox" id="filterAccessible" onchange="updateUI()"> 
     <label for="filterAccessible">使えるプロキシだけを表示</label>
@@ -137,6 +138,49 @@
   <script>
     let results = []; // Store results for filtering
     const blockedURLs = JSON.parse(localStorage.getItem('blockedURLs')) || [];
+
+    async function fetchAndCheckProxies() {
+      const resultDiv = document.getElementById('result');
+      resultDiv.innerHTML = '<p class="loading">プロキシを検索中...</p>';
+
+      try {
+        // Step 1: Fetch the content from the source website
+        const response = await fetch('https://groups.google.com/g/web-proxy-list?pli=1'); // Replace with actual URL
+        if (!response.ok) throw new Error(`プロキシを検索するのに失敗しました: ${response.statusText}`);
+
+        // Step 2: Extract all URLs using a regular expression
+        const content = await response.text();
+        const proxyList = extractURLs(content);
+
+        if (proxyList.length === 0) throw new Error('プロキシが発見されませんでした。');
+
+        resultDiv.innerHTML = '<p class="loading">アクセス可能か確認中...</p>';
+        results = [];
+        let completed = 0;
+
+        // Step 3: Check accessibility for each extracted URL
+        proxyList.forEach(url => {
+          const img = new Image();
+          img.onload = () => updateResult(url, true);
+          img.onerror = () => updateResult(url, false);
+          img.src = `${url}?${Date.now()}`;
+        });
+
+        function updateResult(url, isAccessible) {
+          completed++;
+          results.push({ url, accessible: isAccessible });
+
+          // Update UI dynamically
+          updateUI();
+
+          if (completed === proxyList.length) {
+            resultDiv.innerHTML += '<p><strong>チェックが完了しました!</strong></p>';
+          }
+        }
+      } catch (error) {
+        resultDiv.innerHTML = `<p class="blocked">Error: ${error.message}</p>`;
+      }
+    }
 
     function checkTypedProxies() {
       const resultDiv = document.getElementById('result');
