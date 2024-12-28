@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>プロキシ</title>
+  <title>プロキシby zhjpwlj</title>
   <style>
     /* General Reset and Styles */
     * {
@@ -41,11 +41,24 @@
       cursor: pointer;
       transition: all 0.3s ease;
       box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+      margin: 5px 0;
     }
 
     button:hover {
       background: #005ecf;
       transform: translateY(-2px);
+    }
+
+    textarea {
+      width: 100%;
+      max-width: 700px;
+      height: 100px;
+      margin: 10px 0;
+      padding: 10px;
+      border-radius: 10px;
+      border: 1px solid #ccc;
+      font-size: 1rem;
+      resize: none;
     }
 
     .filter {
@@ -111,7 +124,8 @@
 </head>
 <body>
   <h1>プロキシby zhjpwlj</h1>
-  <button onclick="fetchAndCheckProxies()">プロキシを検索</button>
+  <textarea id="manualInput" placeholder="ここにURLを入力してください。各URLは改行で区切る。"></textarea>
+  <button onclick="checkTypedProxies()">入力されたURLを確認</button>
   <div class="filter">
     <input type="checkbox" id="filterAccessible" onchange="updateUI()"> 
     <label for="filterAccessible">使えるプロキシだけを表示</label>
@@ -122,53 +136,44 @@
 
   <script>
     let results = []; // Store results for filtering
-    const storedURLs = JSON.parse(localStorage.getItem('storedURLs')) || [];
     const blockedURLs = JSON.parse(localStorage.getItem('blockedURLs')) || [];
 
-    async function fetchAndCheckProxies() {
+    function checkTypedProxies() {
       const resultDiv = document.getElementById('result');
-      resultDiv.innerHTML = '<p class="loading">プロキシを検索中...</p>';
+      const input = document.getElementById('manualInput').value.trim();
 
-      try {
-        // Step 1: Fetch the content from the source website
-        const response = await fetch('https://groups.google.com/g/web-proxy-list?pli=1'); // Replace with actual URL
-        if (!response.ok) throw new Error(`プロキシを検索するのに失敗しました。: ${response.statusText}`);
+      if (!input) {
+        resultDiv.innerHTML = '<p class="blocked">入力されたURLがありません。</p>';
+        return;
+      }
 
-        // Step 2: Extract all URLs using a regular expression
-        const content = await response.text();
-        const proxyList = extractURLs(content).filter(url => !storedURLs.includes(url));
+      const proxyList = extractURLs(input);
+      if (proxyList.length === 0) {
+        resultDiv.innerHTML = '<p class="blocked">有効なURLが見つかりません。</p>';
+        return;
+      }
 
-        if (proxyList.length === 0) throw new Error('プロキシが発見されませんでした。');
+      resultDiv.innerHTML = '<p class="loading">アクセス可能か確認中...</p>';
+      results = [];
+      let completed = 0;
 
-        // Save new URLs
-        localStorage.setItem('storedURLs', JSON.stringify([...storedURLs, ...proxyList]));
+      proxyList.forEach(url => {
+        const img = new Image();
+        img.onload = () => updateResult(url, true);
+        img.onerror = () => updateResult(url, false);
+        img.src = `${url}?${Date.now()}`;
+      });
 
-        resultDiv.innerHTML = '<p class="loading">アクセス可能か確認中...</p>';
-        results = [];
-        let completed = 0;
+      function updateResult(url, isAccessible) {
+        completed++;
+        results.push({ url, accessible: isAccessible });
 
-        // Step 3: Check accessibility for each extracted URL
-        proxyList.forEach(url => {
-          const img = new Image();
-          img.onload = () => updateResult(url, true);
-          img.onerror = () => updateResult(url, false);
-          img.src = `${url}?${Date.now()}`;
-        });
+        // Update UI dynamically
+        updateUI();
 
-        function updateResult(url, isAccessible) {
-          completed++;
-          results.push({ url, accessible: isAccessible });
-
-          // Update UI dynamically
-          updateUI();
-
-          // Add "done" message when finished
-          if (completed === proxyList.length) {
-            resultDiv.innerHTML += '<p><strong>チェックが完了しました!</strong></p>';
-          }
+        if (completed === proxyList.length) {
+          resultDiv.innerHTML += '<p><strong>チェックが完了しました!</strong></p>';
         }
-      } catch (error) {
-        resultDiv.innerHTML = `<p class="blocked">Error: ${error.message}</p>`;
       }
     }
 
@@ -188,14 +193,14 @@
       resultDiv.innerHTML = filteredResults.length
         ? filteredResults
             .map(res => `
-              <p class="${blockedURLs.includes(res.url) ? 'blocked' : res.accessible ? 'アクセス可能' : 'ブロックされました。'}">
-                ${blockedURLs.includes(res.url) ? '❌ あなたにより、ブロックされたと認識されました。' : res.accessible ? '✅ アクセス可能' : '❌ ブロックされました。'}: 
+              <p class="${blockedURLs.includes(res.url) ? 'blocked' : res.accessible ? 'accessible' : 'blocked'}">
+                ${blockedURLs.includes(res.url) ? '❌ ブロックされた' : res.accessible ? '✅ アクセス可能' : '❌ ブロックされました'}: 
                 <a href="${res.url}" target="_blank">${res.url}</a>
-                <button class="feedback" onclick="markAsBlocked('${res.url}')">ブロックされた？</button>
+                <button class="feedback" onclick="markAsBlocked('${res.url}')">ブロックする</button>
               </p>
             `)
             .join('')
-        : '<p>プロキシがありません</p>';
+        : '<p>プロキシがありません。</p>';
     }
 
     function markAsBlocked(url) {
