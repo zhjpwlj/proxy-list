@@ -143,23 +143,34 @@
     <script>
         let results = [];
         const blockedURLs = JSON.parse(localStorage.getItem('blockedURLs')) || [];
-        let checkingStatus = null; // 状態を管理
+        let checkingStatus = null;
 
         async function fetchAndCheckProxies() {
             const resultDiv = document.getElementById('result');
-            if (checkingStatus) return; // 処理中の場合は何もしない
+            if (checkingStatus) return;
 
             resultDiv.innerHTML = '<p class="loading">プロキシを検索中...</p>';
             checkingStatus = "fetching";
 
             try {
                 const response = await fetch('https://groups.google.com/g/web-proxy-list?pli=1');
-                if (!response.ok) throw new Error(`プロキシを検索するのに失敗しました: ${response.statusText}`);
+                if (!response.ok) {
+                    console.error("プロキシリストの取得に失敗:", response.status, response.statusText);
+                    throw new Error(`プロキシを検索するのに失敗しました: ${response.statusText}`);
+                }
 
                 const content = await response.text();
-                const proxyList = extractURLs(content);
+                console.log("取得したコンテンツ:", content);
 
-                if (proxyList.length === 0) throw new Error('プロキシが発見されませんでした。');
+                const proxyList = extractURLs(content);
+                console.log("抽出されたURLの数:", proxyList.length);
+
+                if (proxyList.length === 0) {
+                  resultDiv.innerHTML = '<p class="blocked">プロキシが発見されませんでした。正規表現を見直してください。</p>';
+                  checkingStatus = null;
+                  return;
+                }
+
 
                 resultDiv.innerHTML = '<p class="loading">アクセス可能か確認中...</p>';
                 checkingStatus = "checking";
@@ -167,24 +178,33 @@
 
                 const checkPromises = proxyList.map(url => new Promise(resolve => {
                     const img = new Image();
-                    img.onload = () => resolve({ url, accessible: true });
-                    img.onerror = () => resolve({ url, accessible: false });
-                    img.src = `${url}?${Date.now()}`; // キャッシュ対策
+                    img.onload = () => {
+                        console.log(`URL ${url} is accessible.`, img);
+                        resolve({ url, accessible: true });
+                    };
+                    img.onerror = (error) => {
+                        console.error(`URL ${url} is NOT accessible.`, error, img);
+                        resolve({ url, accessible: false });
+                    };
+                    img.src = `${url}?${Date.now()}`;
                 }));
 
                 results = await Promise.all(checkPromises);
 
-                updateUI(); // 全てのチェック完了後に一度だけUIを更新
+                console.log("results:", results);
+                updateUI();
                 resultDiv.innerHTML += '<p><strong>チェックが完了しました!</strong></p>';
                 checkingStatus = null;
 
             } catch (error) {
+                console.error("エラー:", error);
                 resultDiv.innerHTML = `<p class="blocked">Error: ${error.message}</p>`;
                 checkingStatus = null;
             }
         }
 
         function checkTypedProxies() {
+           // ... (fetchAndCheckProxiesとほぼ同様なので省略。上記を参考に実装してください)
             const resultDiv = document.getElementById('result');
             if (checkingStatus) return;
 
@@ -206,13 +226,20 @@
 
             const checkPromises = proxyList.map(url => new Promise(resolve => {
                 const img = new Image();
-                img.onload = () => resolve({ url, accessible: true });
-                img.onerror = () => resolve({ url, accessible: false });
+                img.onload = () => {
+                    console.log(`URL ${url} is accessible.`, img);
+                    resolve({ url, accessible: true });
+                };
+                img.onerror = (error) => {
+                    console.error(`URL ${url} is NOT accessible.`, error, img);
+                    resolve({ url, accessible: false });
+                };
                 img.src = `${url}?${Date.now()}`;
             }));
 
             results = await Promise.all(checkPromises);
 
+            console.log("results:", results);
             updateUI();
             resultDiv.innerHTML += '<p><strong>チェックが完了しました!</strong></p>';
             checkingStatus = null;
@@ -220,19 +247,21 @@
 
         function extractURLs(content) {
             const urlRegex = /(https?:\/\/[^\s/$.?#].[^\s]*)/gi;
-            return [...content.matchAll(urlRegex)].map(match => match[0]);
+            const matches = [...content.matchAll(urlRegex)];
+            console.log("マッチした結果:", matches);
+            return matches.map(match => match[0]);
         }
 
         function updateUI() {
+            console.log("updateUI() called. results:", results);
             const resultDiv = document.getElementById('result');
             const showOnlyAccessible = document.getElementById('filterAccessible').checked;
 
-            // blockedURLsに含まれるURLを最初に除外
             const filteredResults = results.filter(res => !blockedURLs.includes(res.url));
-
             const displayResults = showOnlyAccessible
                 ? filteredResults.filter(res => res.accessible)
                 : filteredResults;
+            console.log("displayResults:", displayResults);
 
             resultDiv.innerHTML = displayResults.length
                 ? displayResults
