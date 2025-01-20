@@ -147,7 +147,7 @@
 
         async function fetchAndCheckProxies() {
             const resultDiv = document.getElementById('result');
-            if (checkingStatus) return;
+            if (checkingStatus) return; // 処理中の場合は何もしない
 
             resultDiv.innerHTML = '<p class="loading">プロキシを検索中...</p>';
             checkingStatus = "fetching";
@@ -169,12 +169,12 @@
                     const img = new Image();
                     img.onload = () => resolve({ url, accessible: true });
                     img.onerror = () => resolve({ url, accessible: false });
-                    img.src = `<span class="math-inline">\{url\}?</span>{Date.now()}`;
+                    img.src = `${url}?${Date.now()}`; // キャッシュ対策
                 }));
 
                 results = await Promise.all(checkPromises);
 
-                updateUI();
+                updateUI(); // 全てのチェック完了後に一度だけUIを更新
                 resultDiv.innerHTML += '<p><strong>チェックが完了しました!</strong></p>';
                 checkingStatus = null;
 
@@ -208,7 +208,7 @@
                 const img = new Image();
                 img.onload = () => resolve({ url, accessible: true });
                 img.onerror = () => resolve({ url, accessible: false });
-                img.src = `<span class="math-inline">\{url\}?</span>{Date.now()}`;
+                img.src = `${url}?${Date.now()}`;
             }));
 
             results = await Promise.all(checkPromises);
@@ -227,6 +227,33 @@
             const resultDiv = document.getElementById('result');
             const showOnlyAccessible = document.getElementById('filterAccessible').checked;
 
+            // blockedURLsに含まれるURLを最初に除外
             const filteredResults = results.filter(res => !blockedURLs.includes(res.url));
 
-            const displayResults =
+            const displayResults = showOnlyAccessible
+                ? filteredResults.filter(res => res.accessible)
+                : filteredResults;
+
+            resultDiv.innerHTML = displayResults.length
+                ? displayResults
+                    .map(res => `
+                        <p class="${res.accessible ? 'accessible' : 'blocked'}">
+                            ${res.accessible ? '✅ アクセス可能' : '❌ アクセスできません'}:
+                            <a href="${res.url}" target="_blank">${res.url}</a>
+                            <button class="feedback" onclick="markAsBlocked('${res.url}')" ${blockedURLs.includes(res.url) ? 'disabled style="background-color:gray; cursor:default;"' : ''}>${blockedURLs.includes(res.url) ? 'ブロック済み' :'ブロックする'}</button>
+                        </p>
+                    `)
+                    .join('')
+                : '<p>プロキシがありません。</p>';
+        }
+
+        function markAsBlocked(url) {
+            if (!blockedURLs.includes(url)) {
+                blockedURLs.push(url);
+                localStorage.setItem('blockedURLs', JSON.stringify(blockedURLs));
+                updateUI();
+            }
+        }
+    </script>
+</body>
+</html>
